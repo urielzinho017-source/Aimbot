@@ -1,0 +1,527 @@
+--[[
+    Script Completo com Tela de Loading + Painel 'davizin' + Botão Flutuante Redondo + Aimbot + ESP
+    Pressione 'Delete' para fechar/destruir o painel e os desenhos.
+]]
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local CoreGui = game:GetService("CoreGui")
+local Cam = workspace.CurrentCamera
+local LocalPlayer = Players.LocalPlayer
+
+-- =======================================================
+-- CONFIGURAÇÕES E ESTADOS GERAIS
+-- =======================================================
+local Settings = {
+    AimbotEnabled = false,
+    FOV = 100,
+    FOVVisible = true,
+    FOVColor = Color3.fromRGB(128, 0, 128),
+    
+    ESPBox = false,
+    ESPLine = false,
+    ESPName = false,
+    ESPHealth = false,
+    ESPColor = Color3.fromRGB(255, 255, 255),
+    
+    Theme = "Dark",
+    BackgroundImage = true,
+    BgAssetId = "rbxassetid://6071579801", -- Textura limpa e moderna
+    IconAssetId = "rbxassetid://6071579801" -- Imagem para o círculo flutuante
+}
+
+-- =======================================================
+-- FOV RING (DRAWING API)
+-- =======================================================
+local FOVring = Drawing.new("Circle")
+FOVring.Visible = Settings.FOVVisible
+FOVring.Thickness = 1.5
+FOVring.Color = Settings.FOVColor
+FOVring.Filled = false
+FOVring.Radius = Settings.FOV
+FOVring.Position = Cam.ViewportSize / 2
+
+-- =======================================================
+-- ESP SYSTEM
+-- =======================================================
+local espDrawings = {}
+
+local function createESP(player)
+    if espDrawings[player] then return end
+    
+    local box = Drawing.new("Square")
+    box.Visible = false
+    box.Thickness = 1.5
+    box.Color = Settings.ESPColor
+    box.Filled = false
+
+    local line = Drawing.new("Line")
+    line.Visible = false
+    line.Thickness = 1.5
+    line.Color = Settings.ESPColor
+
+    local name = Drawing.new("Text")
+    name.Visible = false
+    name.Size = 14
+    name.Center = true
+    name.Outline = true
+    name.Color = Color3.fromRGB(255, 255, 255)
+
+    local healthOutline = Drawing.new("Square")
+    healthOutline.Visible = false
+    healthOutline.Thickness = 1
+    healthOutline.Color = Color3.fromRGB(0, 0, 0)
+    healthOutline.Filled = true
+
+    local healthBar = Drawing.new("Square")
+    healthBar.Visible = false
+    healthBar.Thickness = 1
+    healthBar.Color = Color3.fromRGB(0, 255, 0)
+    healthBar.Filled = true
+
+    espDrawings[player] = {
+        Box = box,
+        Line = line,
+        Name = name,
+        HealthOutline = healthOutline,
+        HealthBar = healthBar
+    }
+end
+
+local function removeESP(player)
+    if espDrawings[player] then
+        for _, obj in pairs(espDrawings[player]) do
+            obj:Remove()
+        end
+        espDrawings[player] = nil
+    end
+end
+
+for _, p in ipairs(Players:GetPlayers()) do
+    if p ~= LocalPlayer then createESP(p) end
+end
+Players.PlayerAdded:Connect(function(p)
+    if p ~= LocalPlayer then createESP(p) end
+end)
+Players.PlayerRemoving:Connect(removeESP)
+
+-- =======================================================
+-- FUNÇÕES DO AIMBOT
+-- =======================================================
+local function lookAt(target)
+    local lookVector = (target - Cam.CFrame.Position).Unit
+    Cam.CFrame = CFrame.new(Cam.CFrame.Position, Cam.CFrame.Position + lookVector)
+end
+
+local function getClosestPlayerInFOV(trg_part)
+    local nearest = nil
+    local last = math.huge
+    local playerMousePos = Cam.ViewportSize / 2
+
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character then
+            local part = player.Character:FindFirstChild(trg_part)
+            local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
+            if part and humanoid and humanoid.Health > 0 then
+                local ePos, isVisible = Cam:WorldToViewportPoint(part.Position)
+                local distance = (Vector2.new(ePos.X, ePos.Y) - playerMousePos).Magnitude
+
+                if distance < last and isVisible and distance < Settings.FOV then
+                    last = distance
+                    nearest = player
+                end
+            end
+        end
+    end
+    return nearest
+end
+
+-- =======================================================
+-- CRIAÇÃO DA GUI
+-- =======================================================
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "DavizinHubGUI"
+ScreenGui.ResetOnSpawn = false
+
+local success, _ = pcall(function()
+    ScreenGui.Parent = CoreGui
+end)
+if not success then
+    ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+end
+
+-- --- TELA DE LOADING ---
+local LoadFrame = Instance.new("Frame")
+LoadFrame.Size = UDim2.new(0, 300, 0, 110)
+LoadFrame.Position = UDim2.new(0.5, -150, 0.5, -55)
+LoadFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+LoadFrame.BorderSizePixel = 0
+LoadFrame.Parent = ScreenGui
+
+local LoadCorner = Instance.new("UICorner")
+LoadCorner.CornerRadius = UDim.new(0, 10)
+LoadCorner.Parent = LoadFrame
+
+local LoadText = Instance.new("TextLabel")
+LoadText.Size = UDim2.new(1, 0, 0, 40)
+LoadText.Position = UDim2.new(0, 0, 0, 15)
+LoadText.Text = "A carregar davizin..."
+LoadText.TextColor3 = Color3.fromRGB(255, 255, 255)
+LoadText.Font = Enum.Font.SourceSansBold
+LoadText.TextSize = 18
+LoadText.BackgroundTransparency = 1
+LoadText.Parent = LoadFrame
+
+local BarBackground = Instance.new("Frame")
+BarBackground.Size = UDim2.new(1, -50, 0, 12)
+BarBackground.Position = UDim2.new(0, 25, 0, 70)
+BarBackground.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+BarBackground.BorderSizePixel = 0
+BarBackground.Parent = LoadFrame
+
+local BarCorner = Instance.new("UICorner")
+BarCorner.CornerRadius = UDim.new(0, 6)
+BarCorner.Parent = BarBackground
+
+local BarFill = Instance.new("Frame")
+BarFill.Size = UDim2.new(0, 0, 1, 0)
+BarFill.BackgroundColor3 = Color3.fromRGB(128, 0, 128)
+BarFill.BorderSizePixel = 0
+BarFill.Parent = BarBackground
+
+local FillCorner = Instance.new("UICorner")
+FillCorner.CornerRadius = UDim.new(0, 6)
+FillCorner.Parent = BarFill
+
+
+-- --- PAINEL PRINCIPAL ---
+local MainFrame = Instance.new("Frame")
+MainFrame.Name = "MainFrame"
+MainFrame.Size = UDim2.new(0, 320, 0, 420)
+MainFrame.Position = UDim2.new(0.5, -160, 0.5, -210)
+MainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+MainFrame.BorderSizePixel = 0
+MainFrame.Active = true
+MainFrame.Draggable = true
+MainFrame.Visible = false
+MainFrame.Parent = ScreenGui
+
+local MainCorner = Instance.new("UICorner")
+MainCorner.CornerRadius = UDim.new(0, 8)
+MainCorner.Parent = MainFrame
+
+-- Fundo do Painel
+local BgImage = Instance.new("ImageLabel")
+BgImage.Name = "BgImage"
+BgImage.Size = UDim2.new(1, 0, 1, 0)
+BgImage.BackgroundTransparency = 1
+BgImage.Image = Settings.BgAssetId
+BgImage.ImageTransparency = 0.8
+BgImage.ScaleType = Enum.ScaleType.Slice
+BgImage.Visible = Settings.BackgroundImage
+BgImage.Parent = MainFrame
+
+local BgCorner = Instance.new("UICorner")
+BgCorner.CornerRadius = UDim.new(0, 8)
+BgCorner.Parent = BgImage
+
+-- Barra de Título
+local TitleBar = Instance.new("Frame")
+TitleBar.Size = UDim2.new(1, 0, 0, 35)
+TitleBar.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+TitleBar.BorderSizePixel = 0
+TitleBar.Parent = MainFrame
+
+local TitleCorner = Instance.new("UICorner")
+TitleCorner.CornerRadius = UDim.new(0, 8)
+TitleCorner.Parent = TitleBar
+
+local TitleLabel = Instance.new("TextLabel")
+TitleLabel.Size = UDim2.new(1, -50, 1, 0)
+TitleLabel.Position = UDim2.new(0, 10, 0, 0)
+TitleLabel.Text = "davizin"
+TitleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
+TitleLabel.Font = Enum.Font.SourceSansBold
+TitleLabel.TextSize = 18
+TitleLabel.BackgroundTransparency = 1
+TitleLabel.Parent = TitleBar
+
+-- Botão Fechar (X Vermelho)
+local CloseBtn = Instance.new("TextButton")
+CloseBtn.Size = UDim2.new(0, 25, 0, 25)
+CloseBtn.Position = UDim2.new(1, -30, 0, 5)
+CloseBtn.Text = "X"
+CloseBtn.TextColor3 = Color3.fromRGB(255, 50, 50)
+CloseBtn.Font = Enum.Font.SourceSansBold
+CloseBtn.TextSize = 16
+CloseBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+CloseBtn.Parent = TitleBar
+
+local CloseCorner = Instance.new("UICorner")
+CloseCorner.CornerRadius = UDim.new(1, 0)
+CloseCorner.Parent = CloseBtn
+
+-- Botão Minimizar (Círculo Flutuante - Inicialmente Invisível)
+local FloatBtn = Instance.new("ImageButton")
+FloatBtn.Name = "FloatButton"
+FloatBtn.Size = UDim2.new(0, 50, 0, 50)
+FloatBtn.Position = UDim2.new(0, 20, 0.5, -25)
+FloatBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+FloatBtn.Image = Settings.IconAssetId
+FloatBtn.Visible = false
+FloatBtn.Active = true
+FloatBtn.Draggable = true
+FloatBtn.Parent = ScreenGui
+
+local FloatCorner = Instance.new("UICorner")
+FloatCorner.CornerRadius = UDim.new(1, 0) -- Torna totalmente redondo
+FloatCorner.Parent = FloatBtn
+
+local FloatStroke = Instance.new("UIStroke")
+FloatStroke.Color = Color3.fromRGB(128, 0, 128)
+FloatStroke.Thickness = 2
+FloatStroke.Parent = FloatBtn
+
+local Container = Instance.new("ScrollingFrame")
+Container.Size = UDim2.new(1, -20, 1, -45)
+Container.Position = UDim2.new(0, 10, 0, 40)
+Container.BackgroundTransparency = 1
+Container.ScrollBarThickness = 4
+Container.CanvasSize = UDim2.new(0, 0, 0, 400)
+Container.Parent = MainFrame
+
+local UIList = Instance.new("UIListLayout")
+UIList.Parent = Container
+UIList.SortOrder = Enum.SortOrder.LayoutOrder
+UIList.Padding = UDim.new(0, 6)
+
+-- Construtor de Botões
+local function createToggle(text, initialState, callback)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(1, -5, 0, 30)
+    btn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    btn.BackgroundTransparency = 0.3
+    btn.Text = text .. ": " .. (initialState and "ON" or "OFF")
+    btn.TextColor3 = initialState and Color3.fromRGB(100, 255, 100) or Color3.fromRGB(200, 200, 200)
+    btn.Font = Enum.Font.SourceSans
+    btn.TextSize = 14
+    btn.Parent = Container
+    
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 4)
+    corner.Parent = btn
+    
+    local enabled = initialState
+    btn.MouseButton1Click:Connect(function()
+        enabled = not enabled
+        btn.Text = text .. ": " .. (enabled and "ON" or "OFF")
+        btn.TextColor3 = enabled and Color3.fromRGB(100, 255, 100) or Color3.fromRGB(200, 200, 200)
+        callback(enabled)
+    end)
+    return btn
+end
+
+-- Controles do Painel
+createToggle("Aimbot Head", false, function(state) Settings.AimbotEnabled = state end)
+createToggle("Exibir FOV", true, function(state) Settings.FOVVisible = state; FOVring.Visible = state end)
+createToggle("ESP Box", false, function(state) Settings.ESPBox = state end)
+createToggle("ESP Line (Tracer)", false, function(state) Settings.ESPLine = state end)
+createToggle("ESP Nome", false, function(state) Settings.ESPName = state end)
+createToggle("ESP Barra de Vida", false, function(state) Settings.ESPHealth = state end)
+createToggle("Imagem de Fundo", true, function(state) Settings.BackgroundImage = state; BgImage.Visible = state end)
+
+-- Botão Cor FOV
+local ColorFOVBtn = Instance.new("TextButton")
+ColorFOVBtn.Size = UDim2.new(1, -5, 0, 30)
+ColorFOVBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+ColorFOVBtn.BackgroundTransparency = 0.3
+ColorFOVBtn.Text = "Cor FOV: Roxo (Clique)"
+ColorFOVBtn.TextColor3 = Settings.FOVColor
+ColorFOVBtn.Font = Enum.Font.SourceSans
+ColorFOVBtn.TextSize = 14
+ColorFOVBtn.Parent = Container
+
+local fovColors = {Color3.fromRGB(128, 0, 128), Color3.fromRGB(255, 0, 0), Color3.fromRGB(0, 255, 0), Color3.fromRGB(0, 150, 255)}
+local fovColorIdx = 1
+ColorFOVBtn.MouseButton1Click:Connect(function()
+    fovColorIdx = (fovColorIdx % #fovColors) + 1
+    Settings.FOVColor = fovColors[fovColorIdx]
+    FOVring.Color = Settings.FOVColor
+    ColorFOVBtn.TextColor3 = Settings.FOVColor
+end)
+
+-- Botão Cor ESP
+local ColorESPBtn = Instance.new("TextButton")
+ColorESPBtn.Size = UDim2.new(1, -5, 0, 30)
+ColorESPBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+ColorESPBtn.BackgroundTransparency = 0.3
+ColorESPBtn.Text = "Cor ESP: Branco (Clique)"
+ColorESPBtn.TextColor3 = Settings.ESPColor
+ColorESPBtn.Font = Enum.Font.SourceSans
+ColorESPBtn.TextSize = 14
+ColorESPBtn.Parent = Container
+
+local espColors = {Color3.fromRGB(255, 255, 255), Color3.fromRGB(255, 255, 0), Color3.fromRGB(255, 0, 128), Color3.fromRGB(0, 255, 255)}
+local espColorIdx = 1
+ColorESPBtn.MouseButton1Click:Connect(function()
+    espColorIdx = (espColorIdx % #espColors) + 1
+    Settings.ESPColor = espColors[espColorIdx]
+    ColorESPBtn.TextColor3 = Settings.ESPColor
+end)
+
+-- Botão Tema
+local ThemeBtn = Instance.new("TextButton")
+ThemeBtn.Size = UDim2.new(1, -5, 0, 30)
+ThemeBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+ThemeBtn.BackgroundTransparency = 0.3
+ThemeBtn.Text = "Tema: Escuro"
+ThemeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+ThemeBtn.Font = Enum.Font.SourceSans
+ThemeBtn.TextSize = 14
+ThemeBtn.Parent = Container
+
+ThemeBtn.MouseButton1Click:Connect(function()
+    if Settings.Theme == "Dark" then
+        Settings.Theme = "Light"
+        ThemeBtn.Text = "Tema: Claro"
+        MainFrame.BackgroundColor3 = Color3.fromRGB(230, 230, 230)
+        TitleBar.BackgroundColor3 = Color3.fromRGB(200, 200, 200)
+        TitleLabel.TextColor3 = Color3.fromRGB(0, 0, 0)
+    else
+        Settings.Theme = "Dark"
+        ThemeBtn.Text = "Tema: Escuro"
+        MainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+        TitleBar.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+        TitleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    end
+end)
+
+-- Tela de Loading
+task.spawn(function()
+    for i = 1, 25 do
+        BarFill.Size = UDim2.new(i / 25, 0, 1, 0)
+        task.wait(0.04)
+    end
+    LoadFrame:Destroy()
+    MainFrame.Visible = true
+end)
+
+-- Lógica do Botão Flutuante (Minimizar / Reabrir)
+CloseBtn.MouseButton1Click:Connect(function()
+    MainFrame.Visible = false
+    FloatBtn.Visible = true -- Mostra o círculo com imagem na tela
+end)
+
+FloatBtn.MouseButton1Click:Connect(function()
+    FloatBtn.Visible = false
+    MainFrame.Visible = true -- Reabre o painel
+end)
+
+local function cleanupAll()
+    RunService:UnbindFromRenderStep("DavizinLoop")
+    FOVring:Remove()
+    for _, drawings in pairs(espDrawings) do
+        for _, obj in pairs(drawings) do
+            obj:Remove()
+        end
+    end
+    ScreenGui:Destroy()
+end
+
+UserInputService.InputBegan:Connect(function(input)
+    if input.KeyCode == Enum.KeyCode.Delete then
+        cleanupAll()
+    end
+end)
+
+-- =======================================================
+-- LOOP PRINCIPAL (RENDERSTEPPED)
+-- =======================================================
+RunService:BindToRenderStep("DavizinLoop", Enum.RenderPriority.Camera.Value + 1, function()
+    FOVring.Position = Cam.ViewportSize / 2
+    FOVring.Radius = Settings.FOV
+
+    if Settings.AimbotEnabled then
+        local closest = getClosestPlayerInFOV("Head")
+        if closest and closest.Character and closest.Character:FindFirstChild("Head") then
+            lookAt(closest.Character.Head.Position)
+        end
+    end
+
+    for player, drawings in pairs(espDrawings) do
+        local character = player.Character
+        local rootPart = character and character:FindFirstChild("HumanoidRootPart")
+        local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+        local head = character and character:FindFirstChild("Head")
+
+        if character and rootPart and humanoid and humanoid.Health > 0 then
+            local vector, onScreen = Cam:WorldToViewportPoint(rootPart.Position)
+
+            if onScreen then
+                local topPosition = head and Cam:WorldToViewportPoint(head.Position + Vector3.new(0, 0.5, 0)) or vector
+                local legPosition = Cam:WorldToViewportPoint(rootPart.Position - Vector3.new(0, 3, 0))
+
+                local height = math.abs(topPosition.Y - legPosition.Y)
+                local width = height / 2
+
+                if Settings.ESPBox then
+                    drawings.Box.Size = Vector2.new(width, height)
+                    drawings.Box.Position = Vector2.new(vector.X - width / 2, topPosition.Y)
+                    drawings.Box.Color = Settings.ESPColor
+                    drawings.Box.Visible = true
+                else
+                    drawings.Box.Visible = false
+                end
+
+                if Settings.ESPLine then
+                    drawings.Line.From = Vector2.new(Cam.ViewportSize.X / 2, Cam.ViewportSize.Y)
+                    drawings.Line.To = Vector2.new(vector.X, legPosition.Y)
+                    drawings.Line.Color = Settings.ESPColor
+                    drawings.Line.Visible = true
+                else
+                    drawings.Line.Visible = false
+                end
+
+                if Settings.ESPName then
+                    drawings.Name.Text = player.Name
+                    drawings.Name.Position = Vector2.new(vector.X, topPosition.Y - 16)
+                    drawings.Name.Visible = true
+                else
+                    drawings.Name.Visible = false
+                end
+
+                if Settings.ESPHealth then
+                    local barWidth = 3
+                    local healthPercentage = math.clamp(humanoid.Health / humanoid.MaxHealth, 0, 1)
+                    local barHeight = height * healthPercentage
+
+                    drawings.HealthOutline.Size = Vector2.new(barWidth + 2, height + 2)
+                    drawings.HealthOutline.Position = Vector2.new(vector.X - (width / 2) - barWidth - 5, topPosition.Y - 1)
+                    drawings.HealthOutline.Visible = true
+
+                    drawings.HealthBar.Size = Vector2.new(barWidth, barHeight)
+                    drawings.HealthBar.Position = Vector2.new(vector.X - (width / 2) - barWidth - 4, topPosition.Y + (height - barHeight))
+                    drawings.HealthBar.Color = Color3.fromRGB(255 - (255 * healthPercentage), 255 * healthPercentage, 0)
+                    drawings.HealthBar.Visible = true
+                else
+                    drawings.HealthOutline.Visible = false
+                    drawings.HealthBar.Visible = false
+                end
+            else
+                drawings.Box.Visible = false
+                drawings.Line.Visible = false
+                drawings.Name.Visible = false
+                drawings.HealthOutline.Visible = false
+                drawings.HealthBar.Visible = false
+            end
+        else
+            drawings.Box.Visible = false
+            drawings.Line.Visible = false
+            drawings.Name.Visible = false
+            drawings.HealthOutline.Visible = false
+            drawings.HealthBar.Visible = false
+        end
+    end
+end)
